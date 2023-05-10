@@ -35,13 +35,14 @@ class Template:
     final_contents: str
     html_file_path: Path
 
-    def __init__(self, md_file_path: Path, yaml_file_path: Path, html_file_path: Path):
+    def __init__(self, md_file_path: Path, yaml_file_path: Path, html_file_path: Path, overwrite: bool = False):
         
         with open(f"{template_dir_path.absolute()}/template.html", 'r+') as html_file:
             self.template_contents = html_file.read()
         
         assert len(self.template_contents) > 0, f"{html_dir_path.absolute()}/template.html is empty"
-        assert not html_file_path.exists(), f"File {html_file_path} already exists, please choose a non-existing filepath"
+        if not overwrite:
+            assert not html_file_path.exists(), f"File {html_file_path} already exists, please choose a non-existing filepath"
         if not md_file_path.exists():
             raise FileNotFoundError(f"File {md_file_path} is not found, please provide an existing filename under {md_dir_path}")
         self.html_file_path = html_file_path
@@ -75,7 +76,7 @@ class Template:
                 if self.subtitle_repl in contents_by_line[line_index]:
                     contents_by_line.pop(line_index)
                     break
-            self.final_contents = contents_by_line.join('\n')
+            self.final_contents = '\n'.join(contents_by_line)
         else:
             self.final_contents = self.final_contents.replace(self.subtitle_repl, subtitle_str)
 
@@ -93,19 +94,20 @@ class Template:
         return run(f"pandoc {md_file_path.absolute()}", hide='stdout')
 
 @task
-def convert_to_html(c, md_filename:str):
+def convert_to_html(c, md_filename: str, overwrite: bool = False):
     md_file_path = Path(f"{md_dir_path}/{md_filename}")
-    html_file_path = Path(f"a.html")
-    #html_file_path = Path(f"{html_dir_path}/{md_file_path.stem}.html")
+    html_file_path = Path(f"{html_dir_path}/{md_file_path.stem}.html")
     yaml_data_path = Path(f"{yaml_dir_path}/{md_file_path.stem}.yaml")
 
-    template = Template(md_file_path, yaml_data_path, html_file_path)
+    template = Template(md_file_path, yaml_data_path, html_file_path, overwrite=overwrite)
     template.populate_template()
     template.write_contents()
 
 @task
-def format_html(c, fix: bool = False, hide_output: bool = True):
-    flags = ['q', 'e']
+def format_html(c, fix: bool = False):
+    flags = ['q', 'i']
     if fix:
         flags.append('m')
-    run(f"tidy -{''.join(flags)} {html_dir_path}/*.html", hide=None if not hide_output else 'both')
+    else:
+        flags.append('e')
+    run(f"tidy -{''.join(flags)} {html_dir_path}/*.html")
